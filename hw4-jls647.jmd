@@ -1,0 +1,319 @@
+---
+title: "BEE 4750/5750 Homework 4"
+author: "Jason Shao (jls647)"
+date: `j import Dates; Dates.Date(Dates.now())`
+weave_options:
+    term: false
+    results: tex
+    cache: off
+---
+
+<!-- This setups the environment and installs packages, but doesn't appear in the generated document -->
+<!-- You shouldn't need to modify this -->
+```julia; echo = false; results = "hidden"
+using Pkg
+Pkg.activate(".")
+Pkg.instantiate()
+```
+
+# Problem 1
+
+## Problem 1.1
+In order to get the overall ash and recycling fractions, you must mulitply the percent of total mass of each component by the respective ash and recycle percentages and sum them together.
+
+Ash
+
+``.15*.08+.40*.07+.05*.05+.03*.10+.02*.15+.05*.02+.18*.02+.04*1+.02*1+.02*1+.01*1+.03*.70=.1641``
+
+This value is the fraction of mass of incoming waste from cities 1 and 2 that end up as residual waste from WTE.
+``\\~\\``
+
+
+Recycle
+
+``.15*.0+.40*.55+.05*.15+.03*.10+.02*0+.05*.30+.18*.40+.04*.60+.02*.75+.02*.80+.01*.50+.03*0=.3775``
+
+This value is the fraction of mass that can be recycled from waste coming in from cities 1 and 2. Therefore, the fraction of incoming waste that will end up as residual waste from recycling is ``1-.3775=.6225``
+``\\~\\``
+
+
+
+Residual waste from MRF can also be sent to WTE, and since some waste components are more recycable than others, there will be a different overall fraction compared to the waste from cities 1 and 2.
+
+
+```math
+\begin{tabular}{c c c}
+Component & Mass fraction of MRF Residual & Mass fraction of combusion ash \\
+Food Wastes & .240964 & .08\\
+Paper + Cardboard & .289157 & .07\\
+Plastics & .068273 & .05\\
+Textiles & .043373 & .10\\
+Rubber, Leather & .032129 & .15\\
+Wood & .056225 & .02\\
+Yard Wastes & .173494 & .02\\
+Glass & .025703 & 1.0\\
+Ferrous & .008032 & 1.0\\
+Aluminum & .006426 & 1.0\\
+Other Metal & .008032 & 1.0\\
+Miscellanous & .048193 & .70\\
+\end{tabular}
+```
+``.240964 *.08+ .289157*.07 + .068273 *.05+.043373 *.1+ .032129 *.15+ .056225 *.02+ .173494 *.02+ .025703 *1+ .008032 *1+ .006426*1 + .008032*1 + .048193*.7=.13861089``
+
+This value is the fraction of mass of residual waste from MRF that ends up as residual waste from WTE.
+
+## Problem 1.2
+The decision variables operational statuses of the disposal sites, how much waste to send to each facility from each town, and how much residual waste is transported between each facility.
+
+Notation:
+
+``W_{ij}=``amount of waste transported from city i to disposal j in Mg/day for i=1,2 and j=1,2,3
+
+``R_{k,j}=``amount of residual waste transported from disposal k to disposal j in Mg/day for k=1,2,3 and j=1,2,3
+
+``Y_j=``operational status of disposal j
+
+## Problem 1.3
+Cost = Transportation cost + Disposal cost
+
+Transportation cost = ``1.5(5W_{1,1}+15W_{1,2}+30W_{1,3}+15W_{2,1}+10W_{2,2}+25W_{2,3}+15R_{1,2}+32R_{1,3}+18R_{2,3})``
+
+Disposal cost = ``1500Y_1+7(W_{1,1}+W_{2,1})+45*.3775(W_{1,1}+W_{2,1})+2500Y_2+60(W_{1,2}+W_{2,2}+R_{1,2})+2000Y_3+50(W_{1,3}+W_{2,3}+R_{1,3}+R_{2,3})``
+
+After some algebra...
+
+``\underset{W_{i,j},R_{k,j},Y_j}{\text{min}} \text{Cost}=31.4875 W_{1,1} + 82.5 W_{1,2} + 95 W_{1,3} + 46.4875 W_{2,1} + 75 W_{2,2} + 87.5 W_{2,3} + 82.5 R_{1,2} + 98 R_{1,3} + 77 R_{2,3} + 1500 Y_1 + 2500 Y_2 + 2000 Y_3``
+## Problem 1.4
+Constraints:
+
+All waste is disposed of, P_i is waste produced by city i
+
+``\sum_{j=1}^3W_{i,j}=P_i \qquad for \: i=1,2 \\~\\``
+
+Disposal Capacities, incoming waste must not exceed capacity
+
+``\sum_{i=1}^2 W_{i,1} \leq 350\\``
+``\sum_{i=1}^2 W_{i,2} + R_{1,2} \leq 150\\``
+``\sum_{i=1}^2 W_{i,3} +R_{1,3} + R_{2,3} \leq 200\\~\\``
+
+Mass balance, mass into site must equal mass out
+
+``R_{2,3}=.1641*(W_{1,2}+W_{2,2})+.13861089*R_{1,2}\\``
+
+``R_{1,2}+R_{1,3}=.6225(W_{1,1}+W_{2,1})\\~\\``
+
+Commitment and non-negativity
+
+``` math
+Y_1 =
+\begin{cases}
+0 & \text{if } \sum_{i=1}^2 W_{i,1} = 0 \\
+1 & \text{if } \sum_{i=1}^2 W_{i,1} > 0 \\
+\end{cases}
+```
+``\\``
+```math
+Y_2 =
+\begin{cases}
+0 & \text{if } \sum_{i=1}^2 W_{i,2} + R_{1,2} = 0 \\
+1 & \text{if } \sum_{i=1}^2 W_{i,2} + R_{1,2} > 0 \\
+\end{cases} 
+```
+``\\``
+
+```math
+ Y_3=1 
+```
+
+```math
+W_{i,j},R_{k,j} \geq 0
+```
+
+
+## Problem 1.5
+```julia
+using JuMP, Cbc
+
+waste = Model(Cbc.Optimizer)
+I=1:2 #number of cities
+J=1:3 #number of disposal sites
+
+@variable(waste, W[i in I, j in J]>=0)
+@variable(waste, R[k in J, j in J]>=0)
+@variable(waste, Y[j in J], Bin)
+
+@objective(waste, Min, 31.4875*W[1,1]+82.5*W[1,2]+95*W[1,3]+46.4875*W[2,1]+75*W[2,2]+87.5*W[2,3]+82.5*R[1,2]+98*R[1,3]+77*R[2,3]+1500*Y[1]+2500*Y[2]+2000*Y[3])
+#@objective(waste, Min, sum([31.4875 82.5 95 ; 46.4875 75 87.5].*W)+sum([0 82.5 98 ; 0 0 77 ; 0 0 0].*R) + sum([1500 2500 2000].*Y))
+city_out=[100;170];
+#all waste disposed of
+@constraint(waste,city[i in I], sum(W[i,:])==city_out[i])
+
+#capacities
+@constraint(waste,mrf,W[1,1]+W[2,1] <=350)
+@constraint(waste,wte,W[1,2]+W[2,2]+R[1,2]<=150)
+@constraint(waste,lf,W[1,3]+W[2,3]+R[1,3]+R[2,3] <=200)
+
+#mass balance
+@constraint(waste,resid1, R[2,3]==.1641*(W[1,2]+W[2,2])+.13861*R[1,2])
+
+@constraint(waste,resid2, R[1,2]+R[1,3]==.6225*(W[1,1]+W[2,1]))
+@constraint(waste,resid3, sum(R[3,:])==0)
+@constraint(waste,noresiddiag, sum(R[i,i] for i in I)==0)
+@constraint(waste,noresid, R[2,1]==0)
+
+#commitment
+@constraint(waste,commit1, !Y[1] => {W[1,1]+W[2,1]==0})
+@constraint(waste,commit2, !Y[2] => {W[1,2]+W[2,2]+R[1,2]==0})
+@constraint(waste,commit3, Y[3]==1)
+```
+
+## Problem 1.6
+```julia
+
+set_silent(waste)
+optimize!(waste)
+objective_value(waste)
+```
+
+
+```julia
+using DataFrames
+w=value.(W).data;
+r=value.(R).data;
+y=value.(Y).data;
+cities=["City 1";  "City 2"];
+Facilities=["Recycling";"Waste-to-energy";"Landfill"];
+mrf=w[:,1];
+wte=w[:,2];
+lf=w[:,3];
+
+resultsy=DataFrame(
+"Facilities" =>Facilities,
+"Operational Status" =>y,
+)
+
+```
+```julia
+using DataFrames
+
+resultsw=DataFrame(
+"Cities" =>cities,
+"Recycling Facility (Mg/day)" =>mrf,
+"Waste-to-energy Facility (Mg/day)" => wte,
+"Landfill (Mg/day)" =>lf
+)
+```
+```julia
+resultsr=DataFrame(
+"Facility k" =>Facilities,
+"R_k,1 (Mg/day)" =>r[:,1],
+"R_k,2 (Mg/day)" => r[:,2],
+"R_k,3 (Mg/day)" =>r[:,3]
+)
+```
+```julia
+using Images, FileIO
+pu_img_path="/Users/jasonshao/Downloads/bee4750 hw4.pdf"
+img=load(pu_img_path)
+```
+
+In this solution, the recycling site is not operational.
+# Problem 2
+
+## Problem 2.1
+The constraints of the problem do not change from Problem 1. The only thing that changes is the objective statement. 
+
+New objective:
+``\underset{W_{i,j},R_{k,j},Y_j}{\text{min}} \text{Cost}=33.9875 W_{1,1} + 105 W_{1,2} + 110 W_{1,3} + 53.9875 W_{2,1} + 95 W_{2,2} + 100 W_{2,3} + 105 R_{1,2} + 114 R_{1,3} + 86 R_{2,3} + 1500 Y_1 + 2500 Y_2 + 2000 Y_3``
+
+## Problem 2.2
+```julia
+using JuMP, Cbc
+
+waste2 = Model(Cbc.Optimizer)
+I=1:2 #number of cities
+J=1:3 #number of disposal sites
+
+@variable(waste2, W2[i in I, j in J]>=0)
+@variable(waste2, R2[k in J, j in J]>=0)
+@variable(waste2, Y2[j in J], Bin)
+
+@objective(waste2, Min, 33.9875*W2[1,1]+105*W2[1,2]+110*W2[1,3]+53.9875*W2[2,1]+95*W2[2,2]+100*W2[2,3]+105*R2[1,2]+114*R2[1,3]+86*R2[2,3]+1500*Y2[1]+2500*Y2[2]+2000*Y2[3])
+#@objective(waste, Min, sum([31.4875 82.5 95 ; 46.4875 75 87.5].*W)+sum([0 82.5 98 ; 0 0 77 ; 0 0 0].*R) + sum([1500 2500 2000].*Y))
+city_out=[100;170];
+#all waste disposed of
+@constraint(waste2,city[i in I], sum(W2[i,:])==city_out[i])
+
+#capacities
+@constraint(waste2,mrf,W2[1,1]+W2[2,1] <=350)
+@constraint(waste2,wte,W2[1,2]+W2[2,2]+R2[1,2]<=150)
+@constraint(waste2,lf,W2[1,3]+W2[2,3]+R2[1,3]+R2[2,3] <=200)
+
+#mass balance
+@constraint(waste2,resid1, R2[2,3]==.1641*(W2[1,2]+W2[2,2])+.13861*R2[1,2])
+
+@constraint(waste2,resid2, R2[1,2]+R2[1,3]==.6225*(W2[1,1]+W2[2,1]))
+@constraint(waste2,resid3, sum(R2[3,:])==0)
+@constraint(waste2,noresiddiag, sum(R2[i,i] for i in I)==0)
+@constraint(waste2,noresid, R2[2,1]==0)
+
+#commitment
+@constraint(waste2,commit1, !Y2[1] => {W2[1,1]+W2[2,1]==0})
+
+@constraint(waste2,commit2, !Y2[2] => {W2[1,2]+W2[2,2]+R2[1,2]==0})
+@constraint(waste2,commit3, Y2[3]==1)
+```
+
+
+
+## Problem 2.3
+```julia
+set_silent(waste2)
+optimize!(waste2)
+objective_value(waste2)
+
+```
+```julia
+using DataFrames
+w2=value.(W2).data;
+r2=value.(R2).data;
+y2=value.(Y2).data;
+cities=["City 1";  "City 2"];
+Facilities=["Recycling";"Waste-to-energy";"Landfill"];
+mrf2=w2[:,1];
+wte2=w2[:,2];
+lf2=w2[:,3];
+
+resultsy2=DataFrame(
+"Facilities" =>Facilities,
+"Operational Status" =>y2,
+)
+
+```
+```julia
+using DataFrames
+
+resultsw2=DataFrame(
+"Cities" =>cities,
+"Recycling Facility (Mg/day)" =>mrf2,
+"Waste-to-energy Facility (Mg/day)" => wte2,
+"Landfill (Mg/day)" =>lf2
+)
+```
+```julia
+resultsr2=DataFrame(
+"Facility k" =>Facilities,
+"R_k,1 (Mg/day)" =>r2[:,1],
+"R_k,2 (Mg/day)" => r2[:,2],
+"R_k,3 (Mg/day)" =>r2[:,3]
+)
+
+```
+```julia
+using Images, FileIO
+pu_img_path="/Users/jasonshao/Downloads/bee4750 hw4 model2.pdf"
+img=load(pu_img_path)
+```
+
+In this solution, the waste-to-energy facility is not operational but the recycling facility is. This is the opposite case for the solution in problem 1. As a result, the waste-to-energy facility sends its residual waste to the landfill, while in the previous solution the recycling facilitity sent residual waste to the landfill. Additionally, in this solution city 1 sends all of its waste to recycling, while for problem 1 it was split between the waste-to-energy and landfill. For city 2, in the first problem all waste was sent to the landfill. For the optimal solution for this problem, the waste is split between recycling and landfill.
+# References
